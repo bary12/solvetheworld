@@ -190,7 +190,10 @@ class Agent:
         })
         # the group(1) is a json string in format {"name": "name", "arguments": {"arg": "value"}}
         for tool_call in tool_calls:
-            tool_call = json.loads(tool_call)
+            try:
+                tool_call = json.loads(tool_call)
+            except json.JSONDecodeError:
+                continue
             if tool_call['name'] == 'run_shell_command':
                 output = self.run_shell_command(tool_call['arguments']['command'])
                 self.add_message({
