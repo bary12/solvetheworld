@@ -192,19 +192,19 @@ class Agent:
         for tool_call in tool_calls:
             try:
                 tool_call = json.loads(tool_call)
-            except json.JSONDecodeError:
+                if tool_call['name'] == 'run_shell_command':
+                    output = self.run_shell_command(tool_call['arguments']['command'])
+                    self.add_message({
+                        "role": "tool",
+                        "name": tool_call['name'],
+                        "content": output,
+                    })
+                elif tool_call['name'] == 'done':
+                    self.finish()
+                    break
+            except (json.JSONDecodeError, KeyError):
                 continue
-            if tool_call['name'] == 'run_shell_command':
-                output = self.run_shell_command(tool_call['arguments']['command'])
-                self.add_message({
-                    "role": "tool",
-                    "name": tool_call['name'],
-                    "content": output,
-                })
-            elif tool_call['name'] == 'done':
-                self.finish()
-                break
-    
+
     def finish(self):
         os.makedirs('logs', exist_ok=True)
         with open(f'logs/{uuid.uuid4()}.json', 'w') as f:
