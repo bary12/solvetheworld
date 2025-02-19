@@ -155,7 +155,7 @@ class Agent:
                 }
             }
         ]
-        self.shell = Shell(repos[repo].working_dir)
+        self.shell = Shell(repo.working_dir)
         self.repo = repo
         self.commit_hash = commit_hash
         self.done = False
