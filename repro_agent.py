@@ -372,7 +372,10 @@ def reward_for_reproducing_issue(prompts, completions, **kwargs):
 trainer = GRPOTrainer(
     model = model,
     processing_class = tokenizer,
-    reward_funcs = [reward_for_done, reward_for_reproducing_issue],
+    reward_funcs = [
+        # reward_for_done,
+        reward_for_reproducing_issue,
+    ],
     args = training_args,
     train_dataset = dataset,
 )
