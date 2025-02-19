@@ -17,7 +17,7 @@ from trl import GRPOConfig
 from grpo_trainer import UnslothGRPOTrainer as GRPOTrainer
 from vllm.outputs import RequestOutput, CompletionOutput
 from vllm import LLM
-from typing import List
+from typing import List, Dict
 import textwrap
 import types
 import uuid
@@ -46,7 +46,7 @@ else:
 
 workspaces_dir = 'workspaces'
 os.makedirs(workspaces_dir, exist_ok=True)
-repos = {}
+repos: Dict[str, git.Repo] = {}
 
 for project in projects['projects']:
     # project is a string like "owner/name", get the github url
@@ -155,6 +155,7 @@ class Agent:
                 }
             }
         ]
+        self.shell = Shell(repos[repo].working_dir)
         self.repo = repo
         self.commit_hash = commit_hash
         self.done = False
@@ -193,7 +194,7 @@ class Agent:
             try:
                 tool_call = json.loads(tool_call)
                 if tool_call['name'] == 'run_shell_command':
-                    output = self.run_shell_command(tool_call['arguments']['command'])
+                    output = self.shell.run_command(tool_call['arguments']['command'])
                     self.add_message({
                         "role": "tool",
                         "name": tool_call['name'],
