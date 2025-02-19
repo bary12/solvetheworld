@@ -34,13 +34,13 @@ with open('projects.json', 'r') as f:
 
 if IS_COLAB:
     model_name = 'Qwen/Qwen2.5-3B-Instruct'
-    max_seq_length = 1024
+    max_seq_length = 2048
     lora_rank = 64
     shell_args = ['/bin/bash']
 else:
-    model_name = 'Qwen/Qwen2.5-1.5B-Instruct'
+    model_name = 'Qwen/Qwen2.5-0.5B-Instruct'
     max_seq_length = 1024
-    lora_rank = 32
+    lora_rank = 8
     container_name = 'repro-agent'
     shell_args = ['docker', 'exec', '-it', container_name, '/bin/bash']
 
@@ -126,7 +126,7 @@ class Shell:
         return '\n'.join(lines)
 
 class Agent:
-    TOOL_CALL_PATTERN = re.compile(r'<tool_call>(.*?)</tool_call>')
+    TOOL_CALL_PATTERN = re.compile(r'<tool_call>\s*(.*?)\s*</tool_call>')
     def __init__(self, prompt, repo, commit_hash):
         self.messages = [
             {"role": "system", "content": "You will be given a description of an issue with the project, you will need to reproduce the issue. You can explore the codebase using the available tools."},
