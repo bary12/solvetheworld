@@ -97,15 +97,11 @@ class Shell:
             },
             **kwargs
         )
-        self.master = None
+        self.master = os.fdopen(self.master_fd, 'r+b')
 
         os.close(self.slave_fd)
 
-    def __enter__(self):
-        self.master = os.fdopen(self.master_fd, 'r+b')
-        return self
-
-    def __exit__(self, exc_type, exc_value, traceback):
+    def close(self):
         self.master.close()
         self.process.terminate()
 
@@ -207,6 +203,7 @@ class Agent:
                 continue
 
     def finish(self):
+        self.shell.close()
         os.makedirs('logs', exist_ok=True)
         with open(f'logs/{uuid.uuid4()}.json', 'w') as f:
             json.dump(self.messages, f, indent=2)
