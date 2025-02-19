@@ -1,0 +1,1 @@
+also install trl with `cd trl && pip install -e .`

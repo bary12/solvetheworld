@@ -1,0 +1,12 @@
+requests
+python-dotenv
+transformers
+unsloth>=2025.2.12
+vllm>=0.7.2
+torch
+gitpython
+datasets
+diffusers
+wandb
+numpy<2.0
+trl

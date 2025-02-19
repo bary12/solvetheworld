@@ -1,0 +1,8 @@
+{
+  "projects": [
+    "Textualize/rich",
+    "Delgan/loguru",
+    "pallets/click",
+    "fastapi/typer"
+  ]
+} 
