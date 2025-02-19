@@ -36,7 +36,7 @@ with open('projects.json', 'r') as f:
 if IS_COLAB:
     model_name = 'Qwen/Qwen2.5-3B-Instruct'
     max_seq_length = 2048
-    lora_rank = 64
+    lora_rank = 32
     shell_args = ['/bin/bash']
 else:
     model_name = 'Qwen/Qwen2.5-0.5B-Instruct'
