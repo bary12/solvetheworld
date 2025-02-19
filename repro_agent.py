@@ -6,6 +6,7 @@ import json
 import git
 import os
 import subprocess
+import openai
 import pty
 from transformers import AutoTokenizer, AutoModelForCausalLM, Qwen2ForCausalLM
 from unsloth import FastLanguageModel, PatchFastRL, is_bfloat16_supported
@@ -13,7 +14,7 @@ import torch
 from datasets import Dataset
 import re
 from trl import GRPOConfig
-from grpo_trainer import GRPOTrainer
+from grpo_trainer import UnslothGRPOTrainer as GRPOTrainer
 from vllm.outputs import RequestOutput, CompletionOutput
 from vllm import LLM
 from typing import List
@@ -257,7 +258,7 @@ class LLMWrapper:
             )
             for i in range(batch_size)
         ]
-        breakpoint()
+
         return ret
 
 
@@ -305,25 +306,92 @@ training_args = GRPOConfig(
     max_grad_norm = 0.1,
     report_to = "wandb",
     output_dir = "outputs",
+    # torch_compile = False, # for now don't compile, speeds up short training runs where inference is the bottleneck.
 )
+
+def _reward_for_done(prompt, completion, **kwargs):
+    # parse all tool calls in completion
+    tool_calls = Agent.TOOL_CALL_PATTERN.findall(completion)
+    for tool_call in tool_calls:
+        try:
+            tool_call = json.loads(tool_call)
+        except json.JSONDecodeError:
+            continue
+        if tool_call['name'] == 'done':
+            return 1.
+    return 0.
+
+def reward_for_done(prompts, completions, **kwargs):
+    return [_reward_for_done(prompt, completion) for prompt, completion in zip(prompts, completions)]
+
+def _reward_for_reproducing_issue(prompt, completion, **kwargs):
+    # parse all tool calls and tool responses
+    tool_call_matches = Agent.TOOL_CALL_PATTERN.findall(completion)
+    tool_calls = []
+    for tool_call_match in tool_call_matches:
+        try:
+            tool_call = json.loads(tool_call_match)
+            tool_calls.append(tool_call)
+        except json.JSONDecodeError:
+            continue
+    
+    # parse all the tool responses
+    TOOL_RESPONSE_PATTERN = re.compile(r'<tool_response>(.*?)</tool_response>')
+    tool_response_matches = TOOL_RESPONSE_PATTERN.findall(completion)
+    tool_responses = []
+    for tool_response_match in tool_response_matches:
+        tool_responses.append(tool_response_match)
+
+    # prepare for llm
+    session = ''
+    for tool_call, tool_response in zip(tool_calls, tool_responses):
+        if tool_call['name'] != 'run_shell_command':
+            continue
+        session += f'$ {tool_call["arguments"]["command"]}\n{tool_response}\n\n'
+    
+    if not any(tool_call['name'] == 'done' for tool_call in tool_calls):
+        return 0.
+    
+    # run the llm
+    response = openai.chat.completions.create(
+        model='gpt-4o-mini',
+        messages=[
+            {"role": "system", "content": "You will be given a description of an issue, along with a shell session that attempts to reproduce the issue. You will need to determine if the issue was reproduced successfully. respond with a json object like {\"success\": true} if the issue was reproduced successfully, or {\"success\": false} if it was not."},
+            {"role": "user", "content": session},
+        ],
+        response_format={
+            "type": "json_object",
+            "json_schema": {
+                "name": "success",
+                "strict": True,
+                "schema": {
+                    "type": "object",
+                    "properties": {
+                        "success": {
+                            "type": "boolean",
+                        },
+                    },
+                },
+            },
+        },
+    )
+    return 1. if json.loads(response.choices[0].message.content)['success'] else 0.
+
+
+def reward_for_reproducing_issue(prompts, completions, **kwargs):
+    repro = [_reward_for_reproducing_issue(prompt, completion) for prompt, completion in zip(prompts, completions)]
+    print(repro)
+    return repro
 
 trainer = GRPOTrainer(
     model = model,
     processing_class = tokenizer,
-    reward_funcs = [lambda x: 0],  # for now just return 0
+    reward_funcs = [reward_for_done, reward_for_reproducing_issue],
     args = training_args,
     train_dataset = dataset,
 )
 
 trainer.llm = LLMWrapper(trainer.llm)
 
-def monkey_patch_grpotrainer_to_not_concat_prompts():
-    import trl.trainer.grpo_trainer as grpo_trainer_module
-    source_lines, _ = inspect.getsourcelines(grpo_trainer_module.GRPOTrainer._prepare_inputs)
-    source_lines = [
-        line.replace('prompt_completion_ids = torch.cat([prompt_ids, completion_ids], dim=1)', 'prompt_completion_ids = completion_ids') \
-        .replace('prompt_completion_ids = completion_ids', 'prompt_completion_ids = torch.cat([prompt_ids, completion_ids], dim=1)')
-        for line in source_lines
-    ]
-
-trainer.train()
+if __name__ == '__main__':
+    trainer.train()
