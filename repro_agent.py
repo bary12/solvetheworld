@@ -133,7 +133,7 @@ class Agent:
 
     def as_completion_output(self):
         chat_template = self.apply_chat_template()
-        token_ids = tokenizer.encode(chat_template)
+        token_ids = tokenizer.encode(chat_template, max_length=max_seq_length, truncation=True)
         return CompletionOutput(
             index=0,
             text=chat_template,
