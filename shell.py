@@ -42,7 +42,6 @@ class Shell:
         chunks = []
         while True:
             chunk = os.read(self.master_fd, 1024).decode('utf-8')
-            print(chunk)
             chunks.append(chunk)
             if UNIQUE_SEPARATOR in chunk:
                 break

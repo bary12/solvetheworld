@@ -294,8 +294,8 @@ def _reward_for_done(prompt, completion, **kwargs):
         if tool_call['name'] == 'done':
             found_done = True
 
-    if invalid_tool_calls > 0:
-        return -float(invalid_tool_calls)
+    # if invalid_tool_calls > 0:
+    #     return -float(invalid_tool_calls)
     if found_done:
         return 1.
     return 0.
