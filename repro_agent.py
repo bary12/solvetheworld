@@ -21,6 +21,7 @@ from typing import List, Dict
 import textwrap
 import types
 import uuid
+from shell import Shell
 PatchFastRL("GRPO", FastLanguageModel)
 
 try:
@@ -63,7 +64,7 @@ for project in projects['projects']:
 with open('issues.json', 'r') as f:
     issues = json.load(f)['issues']
 
-UNIQUE_SEPARATOR = '__dehydrate_the_masses__'
+UNIQUE_SEPARATOR = '__rehydrate_the_masses__'
 
 dataset = Dataset.from_list([
     {
@@ -79,47 +80,6 @@ dataset = Dataset.from_list([
     for issue in issues
 ])
 
-class Shell:
-    def __init__(self, cwd):
-        self.master_fd, self.slave_fd = pty.openpty()
-        kwargs = {}
-        if IS_COLAB:
-            kwargs['cwd'] = cwd
-        self.process = subprocess.Popen(
-            shell_args + ['--noprofile', '--norc'],
-            stdin=subprocess.PIPE,
-            stdout=self.slave_fd,
-            stderr=self.slave_fd,
-            text=True,
-            close_fds=True,
-            env={
-                "PS1": UNIQUE_SEPARATOR,
-            },
-            **kwargs
-        )
-        self.master = os.fdopen(self.master_fd, 'r+b')
-
-        os.close(self.slave_fd)
-
-    def close(self):
-        self.master.close()
-        self.process.terminate()
-
-    def run_command(self, command):
-        if self.master is None:
-            raise RuntimeError("Shell should be called using the with statement")
-
-        self.process.stdin.write(command + '\n')
-        self.process.stdin.flush()
-
-        # read one line at a time, until we see the UNIQUE_SEPARATOR
-        lines = []
-        while True:
-            line = self.process.stdout.readline()
-            if line.strip().endswith(UNIQUE_SEPARATOR):
-                break
-            lines.append(line.strip())
-        return '\n'.join(lines)
 
 class Agent:
     TOOL_CALL_PATTERN = re.compile(r'<tool_call>\s*(.*?)\s*</tool_call>')
@@ -151,7 +111,7 @@ class Agent:
                 }
             }
         ]
-        self.shell = Shell(repo.working_dir)
+        self.shell = Shell(cwd=repo.working_dir, shell_args=shell_args)
         self.repo = repo
         self.commit_hash = commit_hash
         self.done = False
