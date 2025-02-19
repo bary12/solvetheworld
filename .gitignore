@@ -1,6 +1,5 @@
 workspaces/
 unsloth_compiled_cache/
-issues.json
 .env
 __pycache__/
 wandb
