@@ -20,7 +20,7 @@ from vllm import LLM
 from typing import List
 import textwrap
 import types
-
+import uuid
 PatchFastRL("GRPO", FastLanguageModel)
 
 try:
@@ -34,12 +34,12 @@ with open('projects.json', 'r') as f:
 
 if IS_COLAB:
     model_name = 'Qwen/Qwen2.5-3B-Instruct'
-    max_seq_length = 8192
+    max_seq_length = 1024
     lora_rank = 64
     shell_args = ['/bin/bash']
 else:
-    model_name = 'Qwen/Qwen2.5-3B-Instruct'
-    max_seq_length = 512
+    model_name = 'Qwen/Qwen2.5-1.5B-Instruct'
+    max_seq_length = 1024
     lora_rank = 32
     container_name = 'repro-agent'
     shell_args = ['docker', 'exec', '-it', container_name, '/bin/bash']
@@ -74,6 +74,7 @@ dataset = Dataset.from_list([
             issue['repository'],
             issue['merged_prs'][0]['base_commit']['sha']
         ]),
+        "issue": issue['issue_title'] + '\n\n' + issue['discussion'][0]['body']
     }
     for issue in issues
 ])
@@ -198,9 +199,14 @@ class Agent:
                     "content": output,
                 })
             elif tool_call['name'] == 'done':
-                self.done = True
+                self.finish()
                 break
-        
+    
+    def finish(self):
+        os.makedirs('logs', exist_ok=True)
+        with open(f'logs/{uuid.uuid4()}.json', 'w') as f:
+            json.dump(self.messages, f, indent=2)
+        self.done = True
 
 
 class LLMWrapper:
@@ -238,7 +244,7 @@ class LLMWrapper:
             outputs = generation[0].outputs
             for i, output in zip(ids, outputs):
                 if output.finish_reason == "length":
-                    agents[i].done = True
+                    agents[i].finish()
                 else:
                     agents[i].parse_response(output)
                 
@@ -306,7 +312,7 @@ training_args = GRPOConfig(
     max_grad_norm = 0.1,
     report_to = "wandb",
     output_dir = "outputs",
-    # torch_compile = False, # for now don't compile, speeds up short training runs where inference is the bottleneck.
+    torch_compile = False, # for now don't compile, speeds up short training runs where inference is the bottleneck.
 )
 
 def _reward_for_done(prompt, completion, **kwargs):
@@ -324,7 +330,7 @@ def _reward_for_done(prompt, completion, **kwargs):
 def reward_for_done(prompts, completions, **kwargs):
     return [_reward_for_done(prompt, completion) for prompt, completion in zip(prompts, completions)]
 
-def _reward_for_reproducing_issue(prompt, completion, **kwargs):
+def _reward_for_reproducing_issue(prompt, completion, issue, **kwargs):
     # parse all tool calls and tool responses
     tool_call_matches = Agent.TOOL_CALL_PATTERN.findall(completion)
     tool_calls = []
@@ -357,7 +363,7 @@ def _reward_for_reproducing_issue(prompt, completion, **kwargs):
         model='gpt-4o-mini',
         messages=[
             {"role": "system", "content": "You will be given a description of an issue, along with a shell session that attempts to reproduce the issue. You will need to determine if the issue was reproduced successfully. respond with a json object like {\"success\": true} if the issue was reproduced successfully, or {\"success\": false} if it was not."},
-            {"role": "user", "content": session},
+            {"role": "user", "content": issue + '\n\nReproduction attempt:\n\n' + session},
         ],
         response_format={
             "type": "json_object",
@@ -379,7 +385,8 @@ def _reward_for_reproducing_issue(prompt, completion, **kwargs):
 
 
 def reward_for_reproducing_issue(prompts, completions, **kwargs):
-    repro = [_reward_for_reproducing_issue(prompt, completion) for prompt, completion in zip(prompts, completions)]
+    issues = kwargs['issue']
+    repro = [_reward_for_reproducing_issue(prompt, completion, issue=issue) for prompt, completion, issue in zip(prompts, completions, issues)]
     print(repro)
     return repro
 
