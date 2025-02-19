@@ -168,7 +168,7 @@ class Agent:
         
         chat_template = self.apply_chat_template()
         length = len(tokenizer.encode(chat_template))
-        if length > max_seq_length:
+        if length >= max_seq_length:
             self.finish()
 
     def finish(self):
