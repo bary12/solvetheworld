@@ -94,7 +94,7 @@ class Shell:
             close_fds=True,
             env={
                 "PS1": UNIQUE_SEPARATOR,
-            }
+            },
             **kwargs
         )
         self.master = None
