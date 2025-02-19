@@ -43,10 +43,10 @@ class Shell:
         while True:
             chunk = os.read(self.master_fd, 1024).decode('utf-8')
             print(chunk)
+            chunks.append(chunk)
             if UNIQUE_SEPARATOR in chunk:
                 break
-            chunks.append(chunk)
-        return ''.join(chunks)
+        return ''.join(chunks).replace(UNIQUE_SEPARATOR, '')
 
     def run_command(self, command):
         if self.master is None:

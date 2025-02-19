@@ -327,7 +327,7 @@ def _reward_for_reproducing_issue(prompt, completion, issue, **kwargs):
     for tool_call, tool_response in zip(tool_calls, tool_responses):
         if tool_call['name'] != 'run_shell_command':
             continue
-        session += f'$ {tool_call["arguments"]["command"]}\n{tool_response}\n\n'
+        session += f'$ {tool_response}\n\n' # already includes command and newline.
     
     if not any(tool_call['name'] == 'done' for tool_call in tool_calls):
         return 0.
