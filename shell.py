@@ -9,6 +9,10 @@ class Shell:
     def __init__(self, cwd = None, shell_args = None):
         if shell_args is None:
             shell_args = ['/bin/bash']
+        if shell_args[0] == 'docker':
+            # set the shell manually
+            shell_args.insert(2, '-e')
+            shell_args.insert(3, 'PS1=' + UNIQUE_SEPARATOR)
         self.master_fd, self.slave_fd = pty.openpty()
         kwargs = {}
         kwargs['cwd'] = cwd
@@ -38,7 +42,8 @@ class Shell:
         chunks = []
         while True:
             chunk = os.read(self.master_fd, 1024).decode('utf-8')
-            if chunk.strip().endswith(UNIQUE_SEPARATOR):
+            print(chunk)
+            if UNIQUE_SEPARATOR in chunk:
                 break
             chunks.append(chunk)
         return ''.join(chunks)
@@ -50,5 +55,4 @@ class Shell:
         self.process.stdin.write(command + '\n')
         self.process.stdin.flush()
 
-        # read one chunk at a time, until we see the UNIQUE_SEPARATOR
         return self.read_until_prompt()

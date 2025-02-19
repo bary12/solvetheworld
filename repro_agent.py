@@ -21,7 +21,11 @@ from typing import List, Dict
 import textwrap
 import types
 import uuid
+import dotenv
 from shell import Shell
+
+dotenv.load_dotenv()
+
 PatchFastRL("GRPO", FastLanguageModel)
 
 try:
@@ -43,7 +47,7 @@ else:
     max_seq_length = 1024
     lora_rank = 8
     container_name = 'repro-agent'
-    shell_args = ['docker', 'exec', '-it', container_name, '/bin/bash']
+    shell_args = ['docker', 'exec', '-i', container_name, '/bin/bash']  # '-t' allcoated a tty, we do that ourselves in shell.py, and the flag breaks it.
 
 workspaces_dir = 'workspaces'
 os.makedirs(workspaces_dir, exist_ok=True)
@@ -235,7 +239,7 @@ model, tokenizer = FastLanguageModel.from_pretrained(
     load_in_4bit = True, # False for LoRA 16bit
     fast_inference = True, # Enable vLLM fast inference
     max_lora_rank = lora_rank,
-    gpu_memory_utilization = 0.7, # Reduce if out of memory
+    gpu_memory_utilization = 0.6, # Reduce if out of memory
 )
 
 model = FastLanguageModel.get_peft_model(
@@ -264,7 +268,7 @@ training_args = GRPOConfig(
     fp16 = not is_bfloat16_supported(),
     per_device_train_batch_size = 1,
     gradient_accumulation_steps = 1, # Increase to 4 for smoother training
-    num_generations = 6, # Decrease if out of memory
+    num_generations = 4, # Decrease if out of memory
     max_prompt_length = 1024,  # shorter prompts will be truncated, I guess?
     max_completion_length = max_seq_length,
     # num_train_epochs = 1, # Set to 1 for a full training run
@@ -279,17 +283,26 @@ training_args = GRPOConfig(
 def _reward_for_done(prompt, completion, **kwargs):
     # parse all tool calls in completion
     tool_calls = Agent.TOOL_CALL_PATTERN.findall(completion)
+    invalid_tool_calls = 0
+    found_done = False
     for tool_call in tool_calls:
         try:
             tool_call = json.loads(tool_call)
         except json.JSONDecodeError:
+            invalid_tool_calls += 1
             continue
         if tool_call['name'] == 'done':
-            return 1.
+            found_done = True
+
+    if invalid_tool_calls > 0:
+        return -float(invalid_tool_calls)
+    if found_done:
+        return 1.
     return 0.
 
 def reward_for_done(prompts, completions, **kwargs):
     return [_reward_for_done(prompt, completion) for prompt, completion in zip(prompts, completions)]
+
 
 def _reward_for_reproducing_issue(prompt, completion, issue, **kwargs):
     # parse all tool calls and tool responses
