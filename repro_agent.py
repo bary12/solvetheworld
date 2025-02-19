@@ -165,6 +165,11 @@ class Agent:
                     break
             except (json.JSONDecodeError, KeyError):
                 continue
+        
+        chat_template = self.apply_chat_template()
+        length = len(tokenizer.encode(chat_template))
+        if length > max_seq_length:
+            self.finish()
 
     def finish(self):
         self.shell.close()
@@ -268,7 +273,7 @@ training_args = GRPOConfig(
     fp16 = not is_bfloat16_supported(),
     per_device_train_batch_size = 1,
     gradient_accumulation_steps = 1, # Increase to 4 for smoother training
-    num_generations = 4, # Decrease if out of memory
+    num_generations = 3, # Decrease if out of memory
     max_prompt_length = 1024,  # shorter prompts will be truncated, I guess?
     max_completion_length = max_seq_length,
     # num_train_epochs = 1, # Set to 1 for a full training run
